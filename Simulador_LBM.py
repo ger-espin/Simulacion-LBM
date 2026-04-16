@@ -1,4 +1,5 @@
 # LBM D2Q9 BGK - flujo 2D alrededor de un cilindro fijo
+
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.fft import rfft, rfftfreq
@@ -78,8 +79,7 @@ class LBM_Simulator:
         
         # Entrada : Perfil de velocidad fijo
         # Simplificación: Asume que las poblaciones f[k,:,0] se ajustan 
-        # para dar la velocidad Ux=U_INLET. Aquí, se fuerza la velocidad 
-        # y la densidad a un valor conocido para la reconstrucción.
+        # para dar la velocidad Ux=U_INLET.
         self.ux[:, 0] = self.u_inlet
         self.uy[:, 0] = 0.0
         self.rho[:, 0] = 1.0 # Densidad constante a la entrada
@@ -123,7 +123,7 @@ class LBM_Simulator:
                         f_coming = self.f[k, iyn, ixn]
                         
                         # B) Intercambio de Momento (Force): 2 * f_coming * c_k
-                        # El factor de 2 viene de la reflexión.
+                        # El 2 es porque se refleja.
                         Fx_loc += 2.0 * f_coming * C[k, 0]
                         Fy_loc += 2.0 * f_coming * C[k, 1]
                         
@@ -135,12 +135,11 @@ class LBM_Simulator:
                         # en el nodo fluido (iyn, ixn).
                         self.f[OPP[k], iyn, ixn] = f_coming
                         
-        # La fuerza sobre el cilindro (fluido -> sólido) es el negativo de Fx_loc, Fy_loc
+        # La fuerza sobre el cilindro es el negativo de Fx_loc, Fy_loc
         return -Fx_loc, -Fy_loc
 
-# ==============================================================================
-#  3. FUNCIÓN DE POST-PROCESADO Y VISUALIZACIÓN
-# ==============================================================================
+#---------------- POST-PROCESADO Y VISUALIZACIÓN ----------------------
+
 
 def post_process_results(t_arr, Fx_time, Fy_time, u_ref, d_ref, re_target, 
                          output_dir, speed_final, nx, ny):
@@ -149,14 +148,12 @@ def post_process_results(t_arr, Fx_time, Fy_time, u_ref, d_ref, re_target,
     # Parámetros de referencia
     rho0 = 1.0 # Densidad de referencia
     
-    # Coeficientes aerodinámicos (2D: fuerza por unidad de profundidad)
     # Cd = Fx / (0.5 * rho * U^2 * D)
     Cd = np.array(Fx_time) / (0.5 * rho0 * u_ref**2 * d_ref)
     Cl = np.array(Fy_time) / (0.5 * rho0 * u_ref**2 * d_ref)
     
     # --- Cálculo de Strouhal (St) por FFT ---
     Nfft = len(Cl)
-    # Solo usar el último 70% de la serie para asegurar régimen estable
     Cl_stable = Cl[int(Nfft * 0.3):]
     t_stable = t_arr[int(Nfft * 0.3):]
 
@@ -175,7 +172,7 @@ def post_process_results(t_arr, Fx_time, Fy_time, u_ref, d_ref, re_target,
         f_peak = 0.0
         St_est = 0.0
 
-    # --- Salida de Consola ---
+    # --- Salida ---
     print("\n--- Resultados de Simulación ---")
     print(f"Re (target) = {re_target:.1f} ; St (estimado) = {St_est:.4f}")
     print(f"Cd promedio final (última {len(Cl_stable)} it) = {np.mean(Cd[-len(Cl_stable):]):.4f}")
@@ -226,13 +223,8 @@ def post_process_results(t_arr, Fx_time, Fy_time, u_ref, d_ref, re_target,
     plt.savefig(os.path.join(output_dir, f"VelocidadFinal_Re{re_target:.0f}.png"))
     plt.close()
 
-
-# ==============================================================================
-# ⚙️ 4. EJECUCIÓN PRINCIPAL
-# ==============================================================================
-
 def main():
-    # 1. Preparación
+  
     if not os.path.exists(OUTPUT_DIR):
         os.makedirs(OUTPUT_DIR)
         
@@ -241,14 +233,14 @@ def main():
     # Arreglos para almacenamiento de resultados
     Fx_time, Fy_time, time_series = [], [], []
     
-    # Inicializar figura de visualización (modo interactivo)
+    # Inicializar figura de visualización
     plt.ioff() 
     fig, ax = plt.subplots(figsize=(NX/50, NY/50))
     
     # 2. Bucle principal
     t0 = time.time()
     for it in range(MAX_ITERS):
-        # A) Cálculo de macroscópicos, Colisión y Streaming son 3 pasos fijos de LBM
+        # A) Cálculo de macroscópicos, Colisión y Streaming
         sim.calcular_macro() 
         sim.colision_bgk()
         sim.streaming()
@@ -257,7 +249,6 @@ def main():
         sim.aplicar_condiciones_frontera()
         
         # C) Bounce-Back y Cálculo de Fuerza
-        # Importante: El bounce-back también es una condición de frontera local
         Fx, Fy = sim.bounce_back_y_fuerza()
         
         # D) Almacenamiento y Visualización
@@ -277,13 +268,13 @@ def main():
             circle = plt.Circle((CX, CY), D/2.0, color='red', fill=False, linewidth=1)
             ax.add_patch(circle)
             
-            # Añadir barra de color (si no existe)
+            # Añadir barra de color
             if it == 0: fig.colorbar(im, ax=ax, label='|u|')
             
             #plt.draw()
-            #plt.pause(0.001) # Pequeña pausa para actualizar la figura
+            #plt.pause(0.001)
 
-            # 2. Guardar imagen a disco
+            # 2. Guardar imagen
             filename = os.path.join(OUTPUT_DIR, "vel.{0:05d}.png".format(it // OUTPUT_INTERVAL))
             fig.savefig(filename)
             print(f"Iter {it}: Imagen guardada y Fx={Fx:.6f}")
